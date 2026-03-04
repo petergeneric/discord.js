@@ -90,32 +90,39 @@ export class VoiceReceiver {
 	 */
 	private decrypt(buffer: Buffer, mode: string, nonce: Buffer, secretKey: Uint8Array, headerSize: number) {
 		// Copy the last 4 bytes of unpadded nonce to the padding of (12 - 4) or (24 - 4) bytes
-		buffer.copy(nonce, 0, buffer.length - UNPADDED_NONCE_LENGTH);
+		const payloadEnd = buffer.length - UNPADDED_NONCE_LENGTH;
+		buffer.copy(nonce, 0, payloadEnd);
 
 		// The unencrypted RTP header is used as AAD (authenticated but not encrypted)
 		const header = buffer.subarray(0, headerSize);
 
-		// Encrypted contains the extension data, if any, the opus packet, and the auth tag
-		const encrypted = buffer.subarray(headerSize, buffer.length - AUTH_TAG_LENGTH - UNPADDED_NONCE_LENGTH);
-		const authTag = buffer.subarray(
-			buffer.length - AUTH_TAG_LENGTH - UNPADDED_NONCE_LENGTH,
-			buffer.length - UNPADDED_NONCE_LENGTH,
-		);
-
 		switch (mode) {
 			case 'aead_aes256_gcm_rtpsize': {
+				const authTagStart = payloadEnd - AUTH_TAG_LENGTH;
+				const encrypted = buffer.subarray(headerSize, authTagStart);
+				const authTag = buffer.subarray(authTagStart, payloadEnd);
+
 				const decipheriv = crypto.createDecipheriv('aes-256-gcm', secretKey, nonce);
 				decipheriv.setAAD(header);
 				decipheriv.setAuthTag(authTag);
 
-				return Buffer.concat([decipheriv.update(encrypted), decipheriv.final()]);
+				const decrypted = decipheriv.update(encrypted);
+				const final = decipheriv.final(); // Verify auth tag
+
+				if (final.length === 0) {
+					return decrypted;
+				} else {
+					// final() flushes remaining bytes, in reality its return should always be
+					// empty in GCM since update() processes all input immediately
+					return Buffer.concat([decrypted, final]);
+				}
 			}
 
 			case 'aead_xchacha20_poly1305_rtpsize': {
 				// Combined mode expects authtag in the encrypted message
 				return Buffer.from(
 					methods.crypto_aead_xchacha20poly1305_ietf_decrypt(
-						Buffer.concat([encrypted, authTag]),
+						buffer.subarray(headerSize, payloadEnd),
 						header,
 						nonce,
 						secretKey,

@@ -6,13 +6,13 @@ interface Methods {
 		additionalData: Buffer,
 		nonce: Buffer,
 		key: Uint8Array,
-	): Buffer;
+	): Buffer | Uint8Array;
 	crypto_aead_xchacha20poly1305_ietf_encrypt(
 		plaintext: Buffer,
 		additionalData: Buffer,
 		nonce: Buffer,
 		key: Uint8Array,
-	): Buffer;
+	): Buffer | Uint8Array;
 }
 
 const libs = {

@@ -762,14 +762,16 @@ export class Networking extends EventEmitter {
 	 *
 	 * @param opusPacket - The Opus packet to encrypt
 	 * @param connectionData - The current connection data of the instance
+	 * @param additionalData - Additional data to be included in the encryption process
 	 * @param daveSession - The DAVE session to use for encryption
+	 * @returns An array of Uint8Array representing the encrypted payload
 	 */
 	private encryptOpusPacket(
 		opusPacket: Buffer,
 		connectionData: ConnectionData,
 		additionalData: Buffer,
 		daveSession?: DAVESession,
-	) {
+	): Uint8Array[] {
 		const { secretKey, encryptionMode } = connectionData;
 
 		const packet = daveSession?.encrypt(opusPacket) ?? opusPacket;
@@ -782,19 +784,16 @@ export class Networking extends EventEmitter {
 		// 4 extra bytes of padding on the end of the encrypted packet
 		const noncePadding = connectionData.nonceBuffer.subarray(0, 4);
 
-		let encrypted;
 		switch (encryptionMode) {
 			case 'aead_aes256_gcm_rtpsize': {
 				const cipher = crypto.createCipheriv('aes-256-gcm', secretKey, connectionData.nonceBuffer);
 				cipher.setAAD(additionalData);
 
-				encrypted = Buffer.concat([cipher.update(packet), cipher.final(), cipher.getAuthTag()]);
-
-				return [encrypted, noncePadding];
+				return [cipher.update(packet), cipher.final(), cipher.getAuthTag(), noncePadding];
 			}
 
 			case 'aead_xchacha20_poly1305_rtpsize': {
-				encrypted = secretbox.methods.crypto_aead_xchacha20poly1305_ietf_encrypt(
+				const encrypted = secretbox.methods.crypto_aead_xchacha20poly1305_ietf_encrypt(
 					packet,
 					additionalData,
 					connectionData.nonceBuffer,

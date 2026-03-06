@@ -120,7 +120,7 @@ export class VoiceReceiver {
 
 			case 'aead_xchacha20_poly1305_rtpsize': {
 				// Combined mode expects authtag in the encrypted message
-				return Buffer.from(
+				return ensureBuffer(
 					methods.crypto_aead_xchacha20poly1305_ietf_decrypt(
 						buffer.subarray(headerSize, payloadEnd),
 						header,
@@ -249,5 +249,18 @@ export class VoiceReceiver {
 		stream.once('close', () => this.subscriptions.delete(userId));
 		this.subscriptions.set(userId, stream);
 		return stream;
+	}
+}
+
+/**
+ * Wraps a Uint8Array into a Buffer instance if necessary
+ *
+ * @param value
+ */
+function ensureBuffer(value: Buffer | Uint8Array) {
+	if (Buffer.isBuffer(value)) {
+		return value;
+	} else {
+		return Buffer.from(value);
 	}
 }
